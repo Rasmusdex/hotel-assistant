@@ -1,9 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { use, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-export default function Home() {
+export default function RoomPage({
+  params,
+}: {
+  params: Promise<{ roomNumber: string }>
+}) {
+
+  const { roomNumber } = use(params)
 
   const [showPopup, setShowPopup] = useState(true)
 
@@ -21,7 +27,7 @@ export default function Home() {
       .from('requests')
       .insert([
         {
-          room: '101',
+          room: roomNumber,
           request: requestType,
           status: 'waiting'
         }
@@ -170,7 +176,7 @@ export default function Home() {
       )}
 
       <h1 className="text-4xl font-bold mb-10">
-        Oda 101
+        Oda {roomNumber}
       </h1>
 
       <div className="flex flex-col gap-4 w-full max-w-sm">
