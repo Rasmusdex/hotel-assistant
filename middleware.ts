@@ -4,11 +4,10 @@ import {
   verifyAdminSessionToken,
 } from '@/lib/admin-auth'
 
-export function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const session = request.cookies.get(ADMIN_SESSION_COOKIE)?.value
-  const isAuthorized = verifyAdminSessionToken(session)
 
-  if (!isAuthorized) {
+  if (!(await verifyAdminSessionToken(session))) {
     const loginUrl = new URL('/admin-login', request.url)
     loginUrl.searchParams.set('next', request.nextUrl.pathname)
     return NextResponse.redirect(loginUrl)
@@ -18,5 +17,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin'],
+  matcher: ['/admin/:path*'],
 }

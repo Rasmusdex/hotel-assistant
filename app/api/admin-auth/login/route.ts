@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set(ADMIN_SESSION_COOKIE, createAdminSessionToken(), {
+  response.cookies.set(ADMIN_SESSION_COOKIE, await createAdminSessionToken(), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',

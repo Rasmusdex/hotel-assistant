@@ -4,10 +4,13 @@ import { useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 
 export default function QRPage() {
-
   const [roomNumber, setRoomNumber] = useState('101')
 
-  const websiteUrl = `hotel-assistant-ysp1-mpbf0a0k1-palacaner1234-4050s-projects.vercel.app}`
+  const roomPath = `/room/${encodeURIComponent(roomNumber.trim() || '101')}`
+  const websiteUrl =
+    typeof window === 'undefined'
+      ? roomPath
+      : `${window.location.origin}${roomPath}`
 
   return (
 

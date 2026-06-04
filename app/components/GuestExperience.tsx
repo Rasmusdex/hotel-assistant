@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
+import { withHotelId } from '@/lib/hotel'
 
 type GuestExperienceProps = {
   roomNumber: string
@@ -51,11 +52,11 @@ export default function GuestExperience({ roomNumber }: GuestExperienceProps) {
       const { data, error } = await supabase
         .from('requests')
         .insert([
-          {
+          withHotelId({
             room: roomNumber,
             request: requestType,
             status: 'waiting',
-          },
+          }),
         ])
         .select()
         .single()

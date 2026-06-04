@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   Eye,
   EyeOff,
@@ -14,7 +14,6 @@ import { motion } from 'framer-motion'
 
 export default function AdminLoginPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -41,7 +40,10 @@ export default function AdminLoginPage() {
         return
       }
 
-      router.replace(searchParams.get('next') || '/admin')
+      const nextPath =
+        new URLSearchParams(window.location.search).get('next') || '/admin'
+
+      router.replace(nextPath)
       router.refresh()
     } catch {
       setError('Bağlantı kurulamadı. Lütfen tekrar deneyin.')

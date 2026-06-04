@@ -20,6 +20,7 @@ import {
   Wine,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { belongsToCurrentHotel, hotelId } from '@/lib/hotel'
 
 type RequestItem = {
   id: number
@@ -27,6 +28,7 @@ type RequestItem = {
   request: string
   status: string
   created_at: string
+  hotel_id?: string | null
   completed_at?: string | null
 }
 
@@ -112,20 +114,32 @@ export default function AdminPage() {
     ).toISOString()
 
     if (completedAtSupportedRef.current) {
-      const { error } = await supabase
+      let cleanupQuery = supabase
         .from('requests')
         .delete()
         .eq('status', 'completed')
+
+      if (hotelId) {
+        cleanupQuery = cleanupQuery.eq('hotel_id', hotelId)
+      }
+
+      const { error } = await cleanupQuery
         .lt('completed_at', cutoff)
 
       if (!error) return
       completedAtSupportedRef.current = false
     }
 
-    await supabase
+    let fallbackCleanupQuery = supabase
       .from('requests')
       .delete()
       .eq('status', 'completed')
+
+    if (hotelId) {
+      fallbackCleanupQuery = fallbackCleanupQuery.eq('hotel_id', hotelId)
+    }
+
+    await fallbackCleanupQuery
       .lt('created_at', cutoff)
   }, [])
 
@@ -135,10 +149,15 @@ export default function AdminPage() {
 
       await cleanupOldCompletedRequests()
 
-      const { data, error } = await supabase
-        .from('requests')
-        .select('*')
-        .order('created_at', { ascending: false })
+      let query = supabase.from('requests').select('*')
+
+      if (hotelId) {
+        query = query.eq('hotel_id', hotelId)
+      }
+
+      const { data, error } = await query.order('created_at', {
+        ascending: false,
+      })
 
       if (!error && data) {
         const activeRequests = data.filter(shouldShowRequest)
@@ -173,10 +192,15 @@ export default function AdminPage() {
     const completedAt = new Date().toISOString()
 
     if (completedAtSupportedRef.current) {
-      const { error } = await supabase
+      let completeQuery = supabase
         .from('requests')
         .update({ status: 'completed', completed_at: completedAt })
-        .eq('id', id)
+
+      if (hotelId) {
+        completeQuery = completeQuery.eq('hotel_id', hotelId)
+      }
+
+      const { error } = await completeQuery.eq('id', id)
 
       if (!error) {
         fetchRequests({ notifyNew: false })
@@ -186,7 +210,15 @@ export default function AdminPage() {
       completedAtSupportedRef.current = false
     }
 
-    await supabase.from('requests').update({ status: 'completed' }).eq('id', id)
+    let fallbackCompleteQuery = supabase
+      .from('requests')
+      .update({ status: 'completed' })
+
+    if (hotelId) {
+      fallbackCompleteQuery = fallbackCompleteQuery.eq('hotel_id', hotelId)
+    }
+
+    await fallbackCompleteQuery.eq('id', id)
     fetchRequests({ notifyNew: false })
   }
 
@@ -236,6 +268,8 @@ export default function AdminPage() {
         { event: 'INSERT', schema: 'public', table: 'requests' },
         (payload) => {
           const item = payload.new as RequestItem
+          if (!belongsToCurrentHotel(item)) return
+
           if (!knownRequestIdsRef.current.has(item.id)) {
             knownRequestIdsRef.current.add(item.id)
             handleIncomingRequests([item])

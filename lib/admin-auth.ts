@@ -1,5 +1,3 @@
-import { createHmac, timingSafeEqual } from 'crypto'
-
 export const ADMIN_SESSION_COOKIE = 'hotel_admin_session'
 export const ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
 
@@ -16,53 +14,77 @@ function getSessionSecret() {
   )
 }
 
-function base64UrlEncode(value: string | Buffer) {
-  return Buffer.from(value)
-    .toString('base64')
+function bytesToBase64Url(bytes: Uint8Array) {
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+
+  return btoa(binary)
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replaceAll('=', '')
 }
 
-function base64UrlDecode(value: string) {
+function base64UrlToBytes(value: string) {
   const padded = value.padEnd(value.length + ((4 - (value.length % 4)) % 4), '=')
-  return Buffer.from(
-    padded.replaceAll('-', '+').replaceAll('_', '/'),
-    'base64'
-  ).toString('utf8')
+  const binary = atob(padded.replaceAll('-', '+').replaceAll('_', '/'))
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
 }
 
-function sign(payload: string) {
-  return base64UrlEncode(
-    createHmac('sha256', getSessionSecret()).update(payload).digest()
+function base64UrlEncode(value: string) {
+  return bytesToBase64Url(new TextEncoder().encode(value))
+}
+
+function base64UrlDecode(value: string) {
+  return new TextDecoder().decode(base64UrlToBytes(value))
+}
+
+function constantTimeEqual(left: string, right: string) {
+  if (left.length !== right.length) return false
+
+  let result = 0
+  for (let index = 0; index < left.length; index += 1) {
+    result |= left.charCodeAt(index) ^ right.charCodeAt(index)
+  }
+
+  return result === 0
+}
+
+async function sign(payload: string) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(getSessionSecret()),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
   )
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(payload)
+  )
+
+  return bytesToBase64Url(new Uint8Array(signature))
 }
 
-export function createAdminSessionToken() {
+export async function createAdminSessionToken() {
   const session: AdminSession = {
     sub: 'admin',
     exp: Date.now() + ADMIN_SESSION_MAX_AGE * 1000,
   }
   const payload = base64UrlEncode(JSON.stringify(session))
-  return `${payload}.${sign(payload)}`
+  return `${payload}.${await sign(payload)}`
 }
 
-export function verifyAdminSessionToken(token?: string) {
+export async function verifyAdminSessionToken(token?: string) {
   if (!token) return false
 
   const [payload, signature] = token.split('.')
   if (!payload || !signature) return false
 
-  const expectedSignature = sign(payload)
-  const signatureBuffer = Buffer.from(signature)
-  const expectedBuffer = Buffer.from(expectedSignature)
-
-  if (
-    signatureBuffer.length !== expectedBuffer.length ||
-    !timingSafeEqual(signatureBuffer, expectedBuffer)
-  ) {
-    return false
-  }
+  const expectedSignature = await sign(payload)
+  if (!constantTimeEqual(signature, expectedSignature)) return false
 
   try {
     const session = JSON.parse(base64UrlDecode(payload)) as AdminSession
