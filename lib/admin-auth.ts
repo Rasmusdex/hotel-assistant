@@ -1,5 +1,5 @@
 export const ADMIN_SESSION_COOKIE = 'hotel_admin_session'
-export const ADMIN_SESSION_MAX_AGE = 60 * 60 * 12
+export const ADMIN_SESSION_MAX_AGE = 60 * 60 * 24 * 365
 
 type AdminSession = {
   sub: 'admin'

@@ -37,6 +37,8 @@ type NotificationPermissionState = NotificationPermission | 'unsupported'
 const COMPLETED_RETENTION_HOURS = 72
 const CLEANUP_INTERVAL_MS = 1000 * 60 * 5
 
+let notificationAudio: HTMLAudioElement | null = null
+
 export default function AdminPage() {
   const router = useRouter()
   const [requests, setRequests] = useState<RequestItem[]>([])
@@ -45,30 +47,66 @@ export default function AdminPage() {
   const [latestRequest, setLatestRequest] = useState<RequestItem | null>(null)
   const [audioReady, setAudioReady] = useState(false)
   const [notificationPermission, setNotificationPermission] =
-    useState<NotificationPermissionState>('default')
+    useState<NotificationPermissionState>(() => {
+      if (typeof window === 'undefined') return 'default'
+      return 'Notification' in window ? Notification.permission : 'unsupported'
+    })
   const knownRequestIdsRef = useRef<Set<number>>(new Set())
   const initialLoadRef = useRef(true)
   const lastCleanupRef = useRef(0)
   const completedAtSupportedRef = useRef(true)
 
-  const playNotificationSound = useCallback(async () => {
-    const audio = new Audio('/notification.mp3')
+  const getNotificationAudio = useCallback(() => {
+    if (!notificationAudio) {
+      notificationAudio = new Audio('/notification.mp3')
+      notificationAudio.preload = 'auto'
+      notificationAudio.volume = 1
+    }
+
+    return notificationAudio
+  }, [])
+
+  const armNotificationSound = useCallback(async () => {
+    const audio = getNotificationAudio()
 
     try {
+      audio.pause()
+      audio.currentTime = 0
+      audio.volume = 0.01
+      await audio.play()
+      audio.pause()
+      audio.currentTime = 0
+      audio.volume = 1
+      localStorage.setItem('adminNotificationSoundReady', 'true')
+      setAudioReady(true)
+      return true
+    } catch {
+      setAudioReady(false)
+      return false
+    }
+  }, [getNotificationAudio])
+
+  const playNotificationSound = useCallback(async () => {
+    const audio = getNotificationAudio()
+
+    try {
+      audio.pause()
       audio.currentTime = 0
       audio.volume = 1
       await audio.play()
       setAudioReady(true)
 
-      window.setTimeout(() => {
-        const secondAlert = new Audio('/notification.mp3')
-        secondAlert.volume = 0.72
-        secondAlert.play().catch(() => undefined)
-      }, 850)
+      ;[900, 1800].forEach((delay) => {
+        window.setTimeout(() => {
+          const followUpAudio = new Audio('/notification.mp3')
+          followUpAudio.volume = 0.85
+          followUpAudio.play().catch(() => undefined)
+        }, delay)
+      })
     } catch {
       setAudioReady(false)
     }
-  }, [])
+  }, [getNotificationAudio])
 
   const showBrowserNotification = useCallback((item: RequestItem) => {
     if (
@@ -223,19 +261,7 @@ export default function AdminPage() {
   }
 
   const enableNotifications = async () => {
-    const audio = new Audio('/notification.mp3')
-
-    try {
-      audio.currentTime = 0
-      audio.volume = 0.35
-      await audio.play()
-      audio.pause()
-      audio.currentTime = 0
-      audio.volume = 1
-      setAudioReady(true)
-    } catch {
-      setAudioReady(false)
-    }
+    await armNotificationSound()
 
     if (typeof window === 'undefined' || !('Notification' in window)) {
       setNotificationPermission('unsupported')
@@ -251,6 +277,26 @@ export default function AdminPage() {
     router.replace('/admin-login')
     router.refresh()
   }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    getNotificationAudio()
+
+    const unlockAudio = () => {
+      if (!audioReady) {
+        armNotificationSound()
+      }
+    }
+
+    window.addEventListener('pointerdown', unlockAudio, { once: true })
+    window.addEventListener('keydown', unlockAudio, { once: true })
+
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio)
+      window.removeEventListener('keydown', unlockAudio)
+    }
+  }, [armNotificationSound, audioReady, getNotificationAudio])
 
   useEffect(() => {
     const timeout = setTimeout(() => {
